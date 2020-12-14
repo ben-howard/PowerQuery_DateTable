@@ -1,0 +1,73 @@
+/*
+Power Query Code (M-code) to create date table
+Modify the StartDate and EndDate values as necessary for your data - the values should encompass the existing dates in your model.
+*/
+
+let
+
+// Modify this StartDate as neccessary - this should always be 1st January
+ StartDate = #date(2007,01,01),
+
+// Modify EndDate as necessary - this should always be the 31st December
+ EndDate = #date(2027,12,31),
+
+//Get the number of dates that will be required for the table
+ GetDateCount = Duration.Days(EndDate - StartDate),
+
+//Take the count of dates and turn it into a list of dates
+ GetDateList = List.Dates(StartDate, GetDateCount, 
+ #duration(1,0,0,0)),
+
+//Convert the list into a table
+ DateListToTable = Table.FromList(GetDateList, 
+ Splitter.SplitByNothing(), {"Date"}, null, ExtraValues.Error),
+
+//Add Year Column
+ YearNumber = Table.AddColumn(DateListToTable, "Year", 
+ each Date.Year([Date])),
+
+//Add Quarter Column
+ QuarterNumber = Table.AddColumn(YearNumber , "Quarter", 
+ each "Q" & Number.ToText(Date.QuarterOfYear([Date]))),
+
+//Add Week Number Column and prefix with 0
+ WeekNumber= Table.AddColumn(QuarterNumber , "Week Number", 
+ each Date.WeekOfYear([Date])),
+ AddPrefixZeroToWeekNo = Table.TransformColumns(WeekNumber, {{"Week Number", each "0" & Text.From(_, "en-GB"), type text}}),
+ Last2DigitsWeekNo = Table.SplitColumn(AddPrefixZeroToWeekNo, "Week Number", Splitter.SplitTextByPositions({0, 2}, true), {"Week Number.1", "Week Number.2"}),
+ CleanUpWeek1Column = Table.RemoveColumns(Last2DigitsWeekNo,{"Week Number.1"}),
+ RenameToWeekNumber = Table.RenameColumns(CleanUpWeek1Column,{{"Week Number.2", "Week Number"}}),
+
+//Add Month Number Column and prefix with 0
+ MonthNumber = Table.AddColumn(RenameToWeekNumber, "Month Number", 
+ each Date.Month([Date])),
+ AddPrefixZeroToMonthNo = Table.TransformColumns(MonthNumber, {{"Month Number", each "0" & Text.From(_, "en-GB"), type text}}),
+ Last2DigitsMonthNo = Table.SplitColumn(AddPrefixZeroToMonthNo, "Month Number", Splitter.SplitTextByPositions({0, 2}, true), {"Month Number.1", "Month Number.2"}),
+ CleanUpMonth1Column = Table.RemoveColumns(Last2DigitsMonthNo,{"Month Number.1"}),
+ RenameToMonthNumber = Table.RenameColumns(CleanUpMonth1Column,{{"Month Number.2", "Month Number"}}),
+
+//Add Month Name Column
+ MonthName = Table.AddColumn(RenameToMonthNumber , "Month", 
+ each Date.ToText([Date],"MMMM")),
+
+//Add Day of Week Column
+ DayOfWeek = Table.AddColumn(MonthName , "Day of Week", 
+ each Date.ToText([Date],"dddd")),
+
+// Add Day of Week Number
+ CreateDayofWeekColumn = Table.DuplicateColumn(DayOfWeek, "Date", "Date - Copy"),
+ #"Calculated Day of Week" = Table.TransformColumns(CreateDayofWeekColumn,{{"Date - Copy", Date.DayOfWeek, Int64.Type}}),
+ RenameToDayOfWeekNumber = Table.RenameColumns(#"Calculated Day of Week",{{"Date - Copy", "Day of Week Number"}}),
+
+// Add Day of Month Number and prefix with 0
+ CreateDayOfMonthColumn = Table.DuplicateColumn(RenameToDayOfWeekNumber, "Date", "Date - Copy"),
+ #"Extracted Day" = Table.TransformColumns(CreateDayOfMonthColumn,{{"Date - Copy", Date.Day, Int64.Type}}),
+ RenameToDayOfMonthColumn = Table.RenameColumns(#"Extracted Day",{{"Date - Copy", "Day of Month number"}}),
+ AddPrefix0ToDayOfMonth = Table.TransformColumns(RenameToDayOfMonthColumn, {{"Day of Month number", each "0" & Text.From(_, "en-GB"), type text}}),
+ Last2DigitsDayOfMonth = Table.SplitColumn(AddPrefix0ToDayOfMonth, "Day of Month number", Splitter.SplitTextByPositions({0, 2}, true), {"Day of Month number.1", "Day of Month number.2"}),
+ CleanUpDayOfMonth1Column = Table.RemoveColumns(Last2DigitsDayOfMonth,{"Day of Month number.1"}),
+ RenameToDayofMonthNumber = Table.RenameColumns(CleanUpDayOfMonth1Column,{{"Day of Month number.2", "Day of Month number"}}),
+    #"Changed Type" = Table.TransformColumnTypes(RenameToDayofMonthNumber,{{"Date", type date}})
+
+in
+ #"Changed Type"
